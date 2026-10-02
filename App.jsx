@@ -402,6 +402,7 @@ export default function App() {
   const [customFoods, setCustomFoods] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [editingMeal, setEditingMeal] = useState(null);
   const [chat, setChat] = useState([]);
   const [banner, setBanner] = useState(null);
   const [checkingAdjust, setCheckingAdjust] = useState(false);
@@ -581,6 +582,7 @@ export default function App() {
               fasting={fasting} onFasting={saveFasting}
               notes={notes} onNotes={saveNotes}
               onDeleteMeal={(id) => saveMeals(meals.filter((m) => m.id !== id))}
+              onEditMeal={(meal) => setEditingMeal(meal)}
               onAdd={() => setShowAdd(true)}
               onOpenHistory={() => setShowHistory(true)}
               onEditBasics={() => setEditingBasics(true)}
@@ -653,6 +655,7 @@ export default function App() {
         />
       )}
       {showHistory && <HistoryModal onClose={() => setShowHistory(false)} onSaveMealsForDate={saveMealsForDate} />}
+      {editingMeal && <EditMealModal meal={editingMeal} onClose={() => setEditingMeal(null)} onSave={(updated) => { saveMeals(meals.map((m) => m.id === updated.id ? updated : m)); setEditingMeal(null); }} />}
       {limitModal && <LimitModal onClose={() => setLimitModal(false)} />}
     </div>
   );
@@ -1104,7 +1107,27 @@ function suggestMeals(remainingCal, remainingProtein) {
     .slice(0, 3);
 }
 
-function Dashboard({ basics, plan, totals, meals, water, onWater, exercise, onAddExercise, onDeleteExercise, streak, daysLogged, fasting, onFasting, notes, onNotes, onDeleteMeal, onAdd, onOpenHistory, onEditBasics, onAskCoach }) {
+
+function EditMealModal({ meal, onClose, onSave }) {
+  const [form, setForm] = useState({ name: meal.name || "", type: meal.type || "snack", cal: meal.cal ?? 0, p: meal.p ?? 0, c: meal.c ?? 0, f: meal.f ?? 0 });
+  const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const submit = (e) => { e.preventDefault(); onSave({ ...meal, ...form, cal: Number(form.cal) || 0, p: Number(form.p) || 0, c: Number(form.c) || 0, f: Number(form.f) || 0 }); };
+  return (
+    <div className="nt-modal-backdrop" onClick={onClose}>
+      <div className="nt-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="nt-modal-head"><strong>Edit logged meal</strong><button className="nt-iconbtn" onClick={onClose}><X size={18} /></button></div>
+        <form className="nt-modal-body" onSubmit={submit}>
+          <label className="nt-field-label">Meal name<input className="nt-input" value={form.name} onChange={(e) => update("name", e.target.value)} required /></label>
+          <label className="nt-field-label">Meal type<select className="nt-input" value={form.type} onChange={(e) => update("type", e.target.value)}>{MEAL_TYPE_ORDER.map((t) => <option key={t} value={t}>{MEAL_TYPE_LABEL[t]}</option>)}</select></label>
+          <div className="nt-form-grid">{[["cal","Calories (kcal)"],["p","Protein (g)"],["c","Carbs (g)"],["f","Fat (g)"]].map(([key,label]) => <label className="nt-field-label" key={key}>{label}<input className="nt-input" type="number" min="0" step="any" value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
+          <button className="nt-primary-btn" type="submit" style={{ width: "100%", marginTop: 16 }}><Check size={15} /> Save changes</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ basics, plan, totals, meals, water, onWater, exercise, onAddExercise, onDeleteExercise, streak, daysLogged, fasting, onFasting, notes, onNotes, onDeleteMeal, onEditMeal, onAdd, onOpenHistory, onEditBasics, onAskCoach }) {
   const [showExerciseForm, setShowExerciseForm] = useState(false);
   const [showBadges, setShowBadges] = useState(false);
   const burned = exercise.reduce((a, x) => a + x.cal, 0);
@@ -1227,7 +1250,7 @@ function Dashboard({ basics, plan, totals, meals, water, onWater, exercise, onAd
                   <div className="nt-meal-name">{m.name}</div>
                   <div className="nt-meal-macros">{Math.round(m.cal)} kcal · P{round(m.p)} C{round(m.c)} F{round(m.f)}</div>
                 </div>
-                <button className="nt-iconbtn subtle" onClick={() => onDeleteMeal(m.id)}><Trash2 size={15} /></button>
+                <div style={{ display: "flex", gap: 4 }}><button className="nt-iconbtn subtle" aria-label="Edit meal" title="Edit meal" onClick={() => onEditMeal(m)}><Pencil size={15} /></button><button className="nt-iconbtn subtle" aria-label="Delete meal" onClick={() => onDeleteMeal(m.id)}><Trash2 size={15} /></button></div>
               </div>
             ))}
           </div>
