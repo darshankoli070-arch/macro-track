@@ -401,6 +401,7 @@ export default function App() {
   const [weightLog, setWeightLog] = useState([]);
   const [customFoods, setCustomFoods] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [addMealType, setAddMealType] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [editingMeal, setEditingMeal] = useState(null);
   const [chat, setChat] = useState([]);
@@ -583,7 +584,7 @@ export default function App() {
               notes={notes} onNotes={saveNotes}
               onDeleteMeal={(id) => saveMeals(meals.filter((m) => m.id !== id))}
               onEditMeal={(meal) => setEditingMeal(meal)}
-              onAdd={() => setShowAdd(true)}
+              onAdd={(type = null) => { setAddMealType(type); setShowAdd(true); }}
               onOpenHistory={() => setShowHistory(true)}
               onEditBasics={() => setEditingBasics(true)}
               onAskCoach={() => setTab("assistant")}
@@ -641,7 +642,7 @@ export default function App() {
 
       {showAdd && (
         <AddFoodModal
-          basics={basics} customFoods={customFoods} recentFoods={recentFoods}
+          basics={basics} customFoods={customFoods} recentFoods={recentFoods} initialMealType={addMealType}
           onSaveCustomFood={(f) => saveCustomFoods([...customFoods, f])}
           onClose={() => setShowAdd(false)}
           onLimitReached={() => setLimitModal(true)}
@@ -650,7 +651,6 @@ export default function App() {
             const additions = items.map((it) => ({ name: it.name.replace(/\s*\([\d.]+x\)$/, ""), cal: it.cal, p: it.p, c: it.c, f: it.f }));
             const merged = [...additions, ...recentFoods.filter((r) => !additions.some((a) => a.name === r.name))].slice(0, 20);
             saveRecentFoods(merged);
-            setShowAdd(false);
           }}
         />
       )}
@@ -1254,6 +1254,7 @@ function Dashboard({ basics, plan, totals, meals, water, onWater, exercise, onAd
               </div>
             ))}
           </div>
+          <button className="nt-textbtn" style={{ marginTop: 8 }} onClick={() => onAdd(g.type)}><Plus size={13} style={{ marginRight: 4, verticalAlign: "-2px" }} />Add more items</button>
         </div>
       ))}
 
@@ -1618,9 +1619,9 @@ function guessMealType(basics) {
   return "snack";
 }
 
-function AddFoodModal({ basics, customFoods, recentFoods, onSaveCustomFood, onClose, onAddMeals, onLimitReached }) {
+function AddFoodModal({ basics, customFoods, recentFoods, initialMealType, onSaveCustomFood, onClose, onAddMeals, onLimitReached }) {
   const [mode, setMode] = useState("search");
-  const [mealType, setMealType] = useState(() => guessMealType(basics));
+  const [mealType, setMealType] = useState(() => initialMealType || guessMealType(basics));
   const stamp = (items) => onAddMeals(items.map((it) => ({ ...it, type: mealType })));
   const mealTypeOptions = getMealTypeOptions(basics);
   const suggested = guessMealType(basics);
