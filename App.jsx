@@ -1084,6 +1084,14 @@ function Row({ label, value, highlight }) {
 ------------------------------------------------------------------*/
 const MEAL_TYPE_LABEL = { breakfast: "Breakfast", lunch: "Lunch", preworkout: "Pre-workout", postworkout: "Post-workout", dinner: "Dinner", snack: "Snacks" };
 const MEAL_TYPE_ORDER = ["breakfast", "lunch", "preworkout", "postworkout", "dinner", "snack"];
+// Older entries may store display labels (for example, "Breakfast") instead
+// of canonical keys. Normalize them so saved foods remain visible in groups.
+function normalizeMealType(value) {
+  const raw = String(value || "snack").trim().toLowerCase().replace(/[ _-]+/g, "");
+  const aliases = { breakfasts: "breakfast", lunches: "lunch", dinners: "dinner", snacks: "snack", preworkout: "preworkout", postworkout: "postworkout" };
+  const key = aliases[raw] || raw;
+  return MEAL_TYPE_ORDER.includes(key) ? key : "snack";
+}
 const WATER_TARGET = 8;
 
 function computeAchievements({ streak, daysLogged, totals, plan, water }) {
@@ -1137,7 +1145,7 @@ function Dashboard({ basics, plan, totals, meals, water, onWater, exercise, onAd
   const remainingProtein = Math.max(0, plan.protein - totals.p);
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 
-  const grouped = MEAL_TYPE_ORDER.map((t) => ({ type: t, items: meals.filter((m) => (m.type || "snack") === t) })).filter((g) => g.items.length);
+  const grouped = MEAL_TYPE_ORDER.map((t) => ({ type: t, items: meals.filter((m) => normalizeMealType(m.type) === t) })).filter((g) => g.items.length);
   const achievements = computeAchievements({ streak, daysLogged, totals, plan, water });
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
   const suggestions = suggestMeals(remaining, remainingProtein);
