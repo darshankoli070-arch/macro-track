@@ -647,10 +647,13 @@ export default function App() {
           onClose={() => setShowAdd(false)}
           onLimitReached={() => setLimitModal(true)}
           onAddMeals={(items) => {
+            if (!items?.length) return;
             saveMeals([...meals, ...items]);
             const additions = items.map((it) => ({ name: it.name.replace(/\s*\([\d.]+x\)$/, ""), cal: it.cal, p: it.p, c: it.c, f: it.f }));
             const merged = [...additions, ...recentFoods.filter((r) => !additions.some((a) => a.name === r.name))].slice(0, 20);
             saveRecentFoods(merged);
+            setShowAdd(false);
+            setAddMealType(null);
           }}
         />
       )}
@@ -1125,9 +1128,9 @@ function EditMealModal({ meal, onClose, onSave }) {
       <div className="nt-modal" onClick={(e) => e.stopPropagation()}>
         <div className="nt-modal-head"><strong>Edit logged meal</strong><button className="nt-iconbtn" onClick={onClose}><X size={18} /></button></div>
         <form className="nt-modal-body" onSubmit={submit}>
-          <label className="nt-field-label">Meal name<input className="nt-input" value={form.name} onChange={(e) => update("name", e.target.value)} required /></label>
-          <label className="nt-field-label">Meal type<select className="nt-input" value={form.type} onChange={(e) => update("type", e.target.value)}>{MEAL_TYPE_ORDER.map((t) => <option key={t} value={t}>{MEAL_TYPE_LABEL[t]}</option>)}</select></label>
-          <div className="nt-form-grid">{[["cal","Calories (kcal)"],["p","Protein (g)"],["c","Carbs (g)"],["f","Fat (g)"]].map(([key,label]) => <label className="nt-field-label" key={key}>{label}<input className="nt-input" type="number" min="0" step="any" value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
+          <label className="nt-field">Meal name<input className="nt-input" value={form.name} onChange={(e) => update("name", e.target.value)} required /></label>
+          <label className="nt-field">Meal type<select className="nt-input" value={form.type} onChange={(e) => update("type", e.target.value)}>{MEAL_TYPE_ORDER.map((t) => <option key={t} value={t}>{MEAL_TYPE_LABEL[t]}</option>)}</select></label>
+          <div className="nt-form-grid">{[["cal","Calories (kcal)"],["p","Protein (g)"],["c","Carbs (g)"],["f","Fat (g)"]].map(([key,label]) => <label className="nt-field" key={key}>{label}<input className="nt-input" type="number" min="0" step="any" value={form[key]} onChange={(e) => update(key, e.target.value)} /></label>)}</div>
           <button className="nt-primary-btn" type="submit" style={{ width: "100%", marginTop: 16 }}><Check size={15} /> Save changes</button>
         </form>
       </div>
