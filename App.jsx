@@ -1758,8 +1758,25 @@ function ScanFood({ onAddMeals, onLimitReached }) {
   };
 
   const analyze = async () => {
-    setAnalyzing(false);
-    setError("Photo scanning needs an image-recognition service. Since this version uses no external AI/API key, please use Search or Manual entry to add the food.");
+    if (!img?.data) return;
+    setAnalyzing(true);
+    setError("");
+    try {
+      const response = await fetch("/.netlify/functions/scan-food", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: img.data, mimeType: img.type || "image/jpeg" }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Could not recognize this photo. Try another image or use Search.");
+      const found = Array.isArray(payload.items) ? payload.items : [];
+      if (!found.length) throw new Error("I couldn't identify a food clearly in this photo. Try a clearer picture or use Search/manual entry.");
+      setItems(found.map((it) => ({ id: uid(), name: String(it.name || "Food item"), portion: String(it.portion || "estimated serving"), cal: Math.max(0, Math.round(Number(it.cal) || 0)), p: Math.max(0, Number(it.p) || 0), c: Math.max(0, Number(it.c) || 0), f: Math.max(0, Number(it.f) || 0) })));
+    } catch (err) {
+      setError(err?.message || "Photo recognition failed. Please try again or use Search/manual entry.");
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const updateItem = (id, key, val) => setItems((prev) => prev.map((it) => it.id === id ? { ...it, [key]: key === "name" || key === "portion" ? val : Number(val) } : it));
@@ -1816,6 +1833,7 @@ function ScanFood({ onAddMeals, onLimitReached }) {
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={onFile} />
       <input ref={galleryRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
       {error && <p className="nt-note error">{error}</p>}
+      {img && <p className="nt-note">Photo estimates are approximate. Review the food names and portions before adding them.</p>}
       {img && <button className="nt-btn primary full" onClick={analyze} disabled={analyzing}>{analyzing ? <><Loader2 className="nt-spin" size={16} /> Analyzing…</> : "Check photo"}</button>}
     </div>
   );
