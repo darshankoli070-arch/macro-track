@@ -132,7 +132,7 @@ const FAQ_DB = [
   { id: "my2", category: "Myths", q: "Do detox teas or juice cleanses actually work?", keywords: ["detox tea", "juice cleanse", "detox diet"], a: "No real evidence supports them for fat loss — any quick weight drop is mostly water and gut contents, not fat, and it returns once you eat normally again. Your liver and kidneys already handle detoxification; no tea speeds that up." },
   { id: "my3", category: "Myths", q: "Do carbs after 6pm turn into fat?", keywords: ["carbs after 6pm", "carbs at night fat"], a: "No — your body doesn't have a clock that suddenly turns carbs into fat at a certain hour. Total daily calories and carbs matter, not what time you eat them." },
   { id: "my4", category: "Myths", q: "Does eating fat make you fat?", keywords: ["eating fat makes you fat", "dietary fat weight gain"], a: "No — dietary fat and body fat aren't the same thing. Weight gain happens from eating more total calories than you burn, regardless of whether those calories come from fat, carbs, or protein. Fat is just more calorie-dense per gram (9 vs 4), so portions matter." },
-  { id: "ua1", category: "Using This App", q: "How does the photo scan estimate calories?", keywords: ["how photo scan works", "how does scanning work"], a: "Photo scanning requires an image-recognition service. This version does not send photos to an external AI service, so use Search or Manual entry to add food." },
+  { id: "ua1", category: "Using This App", q: "How does the photo scan estimate calories?", keywords: ["how photo scan works", "how does scanning work"], a: "Photo scanning sends the selected meal photo to NutriTrack's secure Netlify function, which uses the configured image-recognition service to identify visible foods and estimate calories and macros. Review the estimates before adding them to your log." },
   { id: "ua2", category: "Using This App", q: "How was my calorie/macro plan calculated?", keywords: ["how plan calculated", "how was my plan made"], a: "Your plan comes from the one-time intake conversation and a built-in local calculation using your body stats and the information you provide. You can also edit the numbers directly anytime from the Profile tab." },
   { id: "ua3", category: "Using This App", q: "How do I change my calorie or macro target?", keywords: ["change my target", "edit my plan", "update calories"], a: "Two ways: type a direct request here like \"set protein to 150\" or \"decrease calories by 200\" and it applies instantly with no AI needed, or go to Profile → Edit for full manual control over every number." },
   { id: "ua4", category: "Using This App", q: "Why does this coach say it can't answer something?", keywords: ["why no answer", "coach cant answer"], a: "This Coach uses built-in answers and local app logic, so very specific questions may not match anything. Browse the topics above or rephrase your question." },
@@ -1762,18 +1762,33 @@ function ScanFood({ onAddMeals, onLimitReached }) {
     setAnalyzing(true);
     setError("");
     try {
-      const response = await fetch("/.netlify/functions/scan-food", {
+      const res = await fetch("/.netlify/functions/scan-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: img.data, mimeType: img.type || "image/jpeg" }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "Could not recognize this photo. Try another image or use Search.");
-      const found = Array.isArray(payload.items) ? payload.items : [];
-      if (!found.length) throw new Error("I couldn't identify a food clearly in this photo. Try a clearer picture or use Search/manual entry.");
-      setItems(found.map((it) => ({ id: uid(), name: String(it.name || "Food item"), portion: String(it.portion || "estimated serving"), cal: Math.max(0, Math.round(Number(it.cal) || 0)), p: Math.max(0, Number(it.p) || 0), c: Math.max(0, Number(it.c) || 0), f: Math.max(0, Number(it.f) || 0) })));
-    } catch (err) {
-      setError(err?.message || "Photo recognition failed. Please try again or use Search/manual entry.");
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(payload.error || "Food scan failed. Please try again.");
+        err.isLimit = res.status === 429;
+        throw err;
+      }
+      const scannedItems = Array.isArray(payload.items) ? payload.items : [];
+      if (scannedItems.length === 0) {
+        throw new Error("I couldn't confidently identify food in that photo. Try a clearer photo with the whole meal visible.");
+      }
+      setItems(scannedItems.map((it) => ({
+        id: uid(),
+        name: String(it.name || "Unknown food"),
+        portion: String(it.portion || ""),
+        cal: Math.max(0, Math.round(Number(it.cal) || 0)),
+        p: Math.max(0, Number(it.p) || 0),
+        c: Math.max(0, Number(it.c) || 0),
+        f: Math.max(0, Number(it.f) || 0),
+      })));
+    } catch (e) {
+      if (e.isLimit && onLimitReached) onLimitReached();
+      else setError(e.message || "Couldn't read that photo — try again or add manually.");
     } finally {
       setAnalyzing(false);
     }
@@ -1833,7 +1848,6 @@ function ScanFood({ onAddMeals, onLimitReached }) {
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={onFile} />
       <input ref={galleryRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
       {error && <p className="nt-note error">{error}</p>}
-      {img && <p className="nt-note">Photo estimates are approximate. Review the food names and portions before adding them.</p>}
       {img && <button className="nt-btn primary full" onClick={analyze} disabled={analyzing}>{analyzing ? <><Loader2 className="nt-spin" size={16} /> Analyzing…</> : "Check photo"}</button>}
     </div>
   );
