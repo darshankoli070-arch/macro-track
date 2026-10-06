@@ -225,6 +225,38 @@ function fileToBase64(file) {
   });
 }
 
+// Keep photo-scan uploads small enough for a Netlify Function request while
+// preserving enough detail for food recognition. This does not change the
+// preview shown in the existing UI.
+async function prepareScanImage(file) {
+  if (!file) throw new Error("Please select a photo first.");
+  if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Could not read that image. Please try another photo."));
+      el.src = objectUrl;
+    });
+
+    const maxSide = 1280;
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+    canvas.height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Your browser could not prepare the photo. Please try again.");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+    return { data: dataUrl.split(",")[1], type: "image/jpeg" };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function callClaude({ system, messages }) {
   // Local coach engine: no Anthropic API, no API key, no Netlify AI function.
   // This keeps the existing App.jsx flow working entirely in the browser.
@@ -1751,32 +1783,52 @@ function ScanFood({ onAddMeals, onLimitReached }) {
 
   const onFile = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const b64 = await fileToBase64(file);
-    setImg({ data: b64, type: file.type, preview: URL.createObjectURL(file) });
-    setItems(null); setError("");
+    try {
+      const preview = URL.createObjectURL(file);
+      const prepared = await prepareScanImage(file);
+      setImg({ ...prepared, preview });
+      setItems(null);
+      setError("");
+    } catch (err) {
+      setError(err.message || "Could not read that photo. Please try another image.");
+    }
   };
 
   const analyze = async () => {
-    if (!img?.data) return;
+    if (!img?.data || analyzing) return;
     setAnalyzing(true);
     setError("");
     try {
       const res = await fetch("/.netlify/functions/scan-food", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ image: img.data, mimeType: img.type || "image/jpeg" }),
       });
-      const payload = await res.json().catch(() => ({}));
+
+      const raw = await res.text();
+      let payload = {};
+      try { payload = raw ? JSON.parse(raw) : {}; } catch {
+        payload = { error: raw ? raw.slice(0, 240) : "The scan service returned an empty response." };
+      }
+
       if (!res.ok) {
-        const err = new Error(payload.error || "Food scan failed. Please try again.");
+        const serverMessage = payload?.error || payload?.message || `Scan service returned HTTP ${res.status}${res.statusText ? ` (${res.statusText})` : ""}.`;
+        const err = new Error(
+          res.status === 404
+            ? "Photo scanning is not deployed on this Netlify site yet. Add netlify/functions/scan-food.js to the project and redeploy."
+            : serverMessage
+        );
         err.isLimit = res.status === 429;
         throw err;
       }
+
       const scannedItems = Array.isArray(payload.items) ? payload.items : [];
       if (scannedItems.length === 0) {
         throw new Error("I couldn't confidently identify food in that photo. Try a clearer photo with the whole meal visible.");
       }
+
       setItems(scannedItems.map((it) => ({
         id: uid(),
         name: String(it.name || "Unknown food"),
