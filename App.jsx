@@ -1801,10 +1801,10 @@ function ScanFood({ onAddMeals, onLimitReached }) {
     setAnalyzing(true);
     setError("");
     try {
-      const res = await fetch("/.netlify/functions/scan-food", {
+      const res = await fetch("/.netlify/functions/food-scan", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ image: img.data, mimeType: img.type || "image/jpeg" }),
+    body: JSON.stringify({ image: img.data, mediaType: img.type || "image/jpeg" }),
       });
 
       const raw = await res.text();
