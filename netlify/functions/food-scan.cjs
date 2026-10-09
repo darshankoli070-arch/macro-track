@@ -1,4 +1,4 @@
-const MODEL = "Qwen/Qwen2.5-VL-7B-Instruct";
+const MODEL = "Qwen/Qwen2.5-VL-3B-Instruct";
 
 function jsonResponse(status, body) {
   return new Response(JSON.stringify(body), {
@@ -136,7 +136,7 @@ All numeric fields must be numbers, not strings.`;
       },
 
       body: JSON.stringify({
-        model: `${MODEL}:fastest`,
+        model: MODEL,
 
         messages: [
           {
